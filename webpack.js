@@ -140,8 +140,13 @@ class Compilation {
       //6.2 得到入口模块的的 `module` 对象 （里面放着该模块的路径、依赖模块、源代码等）
       let entryModule = this.buildModule(entryName, entryFilePath);
       //6.3 将生成的入口文件 `module` 对象 push 进 `this.modules` 中
-      console.log('entryModule', entryModule);
       this.modules.push(entryModule);
+      let chunk = {
+        name: entryName, //entryName="main" 代码块的名称
+        entryModule, //此代码块对应的module的对象,这里就是src/index.js 的module对象
+        modules: this.modules.filter(item => item.names.includes(entryName)), //找出属于该代码块的模块
+      };
+      this.chunks.push(chunk);
     }
 
     callback();
