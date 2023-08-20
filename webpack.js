@@ -5,7 +5,7 @@ const parser = require('@babel/parser');
 let types = require('@babel/types'); //用来生成或者判断节点的AST语法树的节点
 const traverse = require('@babel/traverse').default;
 const generator = require('@babel/generator').default;
-const { toUnixPath, baseDir, tryExtensions } = require('./utils');
+const { toUnixPath, baseDir, tryExtensions, getSource } = require('./utils');
 
 //Compiler其实是一个类，它是整个编译过程的大管家，而且是单例模式
 class Compiler {
@@ -27,7 +27,22 @@ class Compiler {
   //第四步：执行`Compiler`对象的`run`方法开始执行编译
   run(callback) {
     this.hooks.run.call(); //在编译前触发run钩子执行，表示开始启动编译了
-    const onCompiled = () => {
+    const onCompiled = (err, stats, fileDependencies) => {
+      //第十步：确定好输出内容之后，根据配置的输出路径和文件名，将文件内容写入到文件系统（这里就是硬盘）
+      for (let filename in stats.assets) {
+        let filePath = path.join(this.options.output.path, filename);
+        fs.writeFileSync(filePath, stats.assets[filename], 'utf8');
+      }
+
+      callback(err, {
+        toJson: () => stats,
+      });
+
+      // 当文件发生变化时，重新执行 compile 函数。
+      fileDependencies.forEach(fileDependencie => {
+        fs.watch(fileDependencie, () => this.compile(onCompiled));
+      });
+
       this.hooks.done.call(); //当编译成功后会触发done这个钩子执行
     };
     this.compile(onCompiled); //开始编译，成功之后调用onCompiled
@@ -141,6 +156,7 @@ class Compilation {
       let entryModule = this.buildModule(entryName, entryFilePath);
       //6.3 将生成的入口文件 `module` 对象 push 进 `this.modules` 中
       this.modules.push(entryModule);
+      //等所有模块都编译完成后，根据模块之间的依赖关系，组装代码块 `chunk`（一般来说，每个入口文件会对应一个代码块`chunk`，每个代码块`chunk`里面会放着本入口模块和它依赖的模块）
       let chunk = {
         name: entryName, //entryName="main" 代码块的名称
         entryModule, //此代码块对应的module的对象,这里就是src/index.js 的module对象
@@ -149,7 +165,21 @@ class Compilation {
       this.chunks.push(chunk);
     }
 
-    callback();
+    //第九步：把各个代码块 `chunk` 转换成一个一个文件加入到输出列表
+    this.chunks.forEach(chunk => {
+      let filename = this.options.output.filename.replace('[name]', chunk.name);
+      this.assets[filename] = getSource(chunk);
+    });
+
+    callback(
+      null,
+      {
+        chunks: this.chunks,
+        modules: this.modules,
+        assets: this.assets,
+      },
+      this.fileDependencies
+    );
   }
 }
 
