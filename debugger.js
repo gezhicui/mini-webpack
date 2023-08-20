@@ -1,7 +1,10 @@
-// const { webpack } = require("./webpack.js"); //后面自己手写
-const { webpack } = require('webpack');
+const { webpack } = require('./webpack.js');
+//const { webpack } = require('webpack');
 const webpackOptions = require('./webpack.config.js');
+
 const compiler = webpack(webpackOptions);
+
+console.log('compiler', compiler);
 
 //开始编译
 compiler.run((err, stats) => {
